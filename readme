@@ -1,0 +1,64 @@
+2022-02-11                                                            bumbread
+------------------------------------------------------------------------------
+
+Stivale2 bindings for Odin. This library contains the bindings for the
+stivale2 boot protocol, the documentation for which you can find here:
+
+    https://github.com/stivale/stivale/blob/master/STIVALE2.md
+
+What follows is odin-specific recommendations for usage. In order to use
+stivale2 with odin, download the headers and import the stivale2 package.
+
+First, you'll need to create chain of header tags in your odin code. This
+should be relatively simple. Here's an example of a header chain from the
+barebones stivale2 example, adapted to Odin:
+
+    terminal_hdr_tag: stivale2_header_tag_terminal = {
+        tag = {
+            id = STIVALE2_HEADER_TAG_TERMINAL_ID,
+            next = nil,
+        },
+        flags = 0,
+    };
+
+    @(export) framebuffer_hdr_tag: stivale2_header_tag_framebuffer = {
+        tag = {
+            id = STIVALE2_HEADER_TAG_FRAMEBUFFER_ID,
+            next = &terminal_hdr_tag.tag,
+        },
+        framebuffer_width  = 0,
+        framebuffer_height = 0,
+        framebuffer_bpp    = 0,
+    };
+
+The first tag in the chain has to have @(export) attribute on it. We will use
+the linker to write the chain start to the stivale2 header section.
+
+The next thing you will need to do is create the kernel stack. Here's a simple
+way to do it:
+
+    @(export) kernel_stack: [8196]u8 = {};
+
+After that we're ready to create the stivale2 header section. Unlike the
+stivale2 barebones example in the current version of Odin it's impossible to
+make a global struct such that it's values are in the section at link time.
+Therefore to create the stivale2 header we'll use the linker script. You need
+to have the following line in your SECTIONS part of linker script:
+
+    .stivale2hdr : ALIGN(0x10) {
+        QUAD(0);
+        QUAD(kernel_stack + 8096);
+        QUAD(0x1e);
+        QUAD(framebuffer_hdr_tag);
+    }
+
+And the last thing is to make sure you're compiling properly. The following
+flags are recommended for kernel development:
+
+    -disable-assert
+    -no-crt
+    -no-bounds-check
+    -default-to-nil-allocator
+
+If you omit -no-bounds-check there's a chance you will crash upon accessing
+the "flexible array members", because Odin doesn't support them.
